@@ -6,6 +6,7 @@ import cookieParser from 'cookie-parser'
 import session from 'express-session'
 import passport from 'passport'
 import { Strategy, GooleStrategy } from 'passport-google-oauth20'
+import { timeStamp } from 'console'
 
 
 
@@ -26,21 +27,21 @@ app.use(
   cors({
     origin: process.env.FRONTEND_URL || "htpp://localhost:3000",
     credentials: true,
-}),
+  }),
 )
 
 // Configuraação da Sessão
 
 app.use(
   session({
-      secret: process.env.SESSION_SECRET || "escala-acolitos-backend",
-      resave: false,
-      saveUninitialized: false,
-      cookie: {
-        secure: process.env.NODE_ENV === "production",
-        maxAge: 24 * 48 * 60 * 1000,
+    secret: process.env.SESSION_SECRET || "escala-acolitos-backend",
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      secure: process.env.NODE_ENV === "production",
+      maxAge: 24 * 48 * 60 * 1000,
 
-      },
+    },
   }),
 
 )
@@ -58,11 +59,11 @@ passport.use(
       clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
       callbackURL: `${process.env.API_URL || "http://localhost:5000}/auth/google/callback"}`,
     },
-      async (acessToken, refreshToken, profile, done) => {
-        try {
-          // Verificar se o usuário já existe
-          let user = await User.findOne({ googleId: profile.id })
-          if(!user) {
+    async (acessToken, refreshToken, profile, done) => {
+      try {
+        // Verificar se o usuário já existe
+        let user = await User.findOne({ googleId: profile.id })
+        if (!user) {
           //Criar novo usuário se não existir
           user = await User.create({
             googleId: profile.id,
@@ -73,25 +74,55 @@ passport.use(
             status: "pendente", // Administrador precisa aprovar
           })
         }
-        return done (null, user)
-      } catch(error) {
-      return done(error as Error)}
+        return done(null, user)
+      } catch (error) {
+        return done(error as Error)
       }
+    }
   ),
 )
 // Serialização e deserialização do usuário
 passport.serializeUser((user: any, done) => {
-    done(null, user.id)
-  })
-
-
-
+  done(null, user.id)
+})
 
 
 // Rotas
+
+app.use("/auth", authRoutes)
+app.use("/api/acolitos", acolitoRoutes)
+app.use("/api/scales", scalesRoutes)
+app.use("/api/admin", adminRoutes)
+
+
+
+
 // Rota de status
+app.get("/status", (req, res) => {
+  res.json({ status: "online", timeStamp: new Date() })
+})
+
 // Conexão com o MongoDB
-//
+
+mongoose
+  .connect(process.env.MONGODB_URI || "mongodb://localhost;27017/escala-acolitos")
+  .then(() => {
+    console.log("conectado ao MongoDB")
+    // Iniciar o servidor após conectar ao banco de dados
+    app.listen(PORT, () => {
+      console.log(`Servidor conectado na porta${PORT}`)
+
+    })
+  })
+  .catch((err) => {
+    console.error("Erro ao conectar ao MongoDB:", err)
+    process.exit(1)
+  })
+
+
+export default app
+
+
 
 
 
