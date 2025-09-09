@@ -77,3 +77,4 @@ export const isActive = (req: AuthenticatedRequest, res: Response, next: NextFun
     message: "Sua conta está inativa ou pendente de aprovação.",
   })
 }
+

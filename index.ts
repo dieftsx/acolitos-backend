@@ -9,10 +9,10 @@ import dotenv from "dotenv"
 import "./config/firebase"
 
 // Importar rotas
-import authRoutes from "./routes/auth.routes"
-import acolitoRoutes from "./routes/acolito.routes"
-import escalaRoutes from "./routes/escala.routes"
-import adminRoutes from "./routes/admin.routes"
+import authRoutes from "./src/routes/auth.routes"
+import acolitoRoutes from "./src/routes/acolito.routes"
+import escalaRoutes from "./src/routes/escala.routes"
+import adminRoutes from "./src/routes/admin.routes"
 
 // Configuração de variáveis de ambiente
 dotenv.config()
