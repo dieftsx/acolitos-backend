@@ -1,128 +1,102 @@
-import express from 'express'
-import cors from 'cors'
-import dotenv from 'dotenv'
-import mongoose from 'mongoose'
-import cookieParser from 'cookie-parser'
-import session from 'express-session'
-import passport from 'passport'
-import { Strategy, GooleStrategy } from 'passport-google-oauth20'
-import { timeStamp } from 'console'
+import express from "express"
+import cors from "cors"
+import helmet from "helmet"
+import compression from "compression"
+import rateLimit from "express-rate-limit"
+import dotenv from "dotenv"
 
+// Importar configuração do Firebase
+import "./config/firebase"
 
+// Importar rotas
+import authRoutes from "./routes/auth.routes"
+import acolitoRoutes from "./routes/acolito.routes"
+import escalaRoutes from "./routes/escala.routes"
+import adminRoutes from "./routes/admin.routes"
 
-//Configuração de variáveis de ambiente
-
+// Configuração de variáveis de ambiente
 dotenv.config()
 
-// inicialização do express
+// Inicialização do app Express
 const app = express()
-const PORT = process.env.PORT || 5000
+const PORT = process.env.PORT || 8080
 
+// Middleware de segurança
+app.use(helmet())
+app.use(compression())
 
-//Middleware
-app.use(express.json())
-app.use(cookieParser())
+// Rate limiting
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutos
+  max: 100, // máximo 100 requests por IP por janela de tempo
+  message: "Muitas requisições deste IP, tente novamente em 15 minutos.",
+})
+app.use(limiter)
 
+// Middleware básico
+app.use(express.json({ limit: "10mb" }))
+app.use(express.urlencoded({ extended: true }))
+
+// CORS
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL || "htpp://localhost:3000",
+    origin:
+      process.env.NODE_ENV === "production"
+        ? [process.env.FRONTEND_URL || "https://escala-acolitos.web.app"]
+        : ["http://localhost:3000", "http://127.0.0.1:3000"],
     credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
   }),
 )
-
-// Configuraação da Sessão
-
-app.use(
-  session({
-    secret: process.env.SESSION_SECRET || "escala-acolitos-backend",
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-      secure: process.env.NODE_ENV === "production",
-      maxAge: 24 * 48 * 60 * 1000,
-
-    },
-  }),
-
-)
-
-
-// Inicialização do Passport
-app.use(passport.initialize())
-app.use(passport.session())
-
-// Configuração da estratégia Google OAuth
-passport.use(
-  new GooleStrategy(
-    {
-      clientID: process.env.GOOGLE_CLIENT_ID || "",
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
-      callbackURL: `${process.env.API_URL || "http://localhost:5000}/auth/google/callback"}`,
-    },
-    async (acessToken, refreshToken, profile, done) => {
-      try {
-        // Verificar se o usuário já existe
-        let user = await User.findOne({ googleId: profile.id })
-        if (!user) {
-          //Criar novo usuário se não existir
-          user = await User.create({
-            googleId: profile.id,
-            email: profile.emails?.[0].value,
-            nome: profile.displayName,
-            foto: profile.photos?.[0].value,
-            role: "acolito", //Por padrão, novos usuários são acólitos
-            status: "pendente", // Administrador precisa aprovar
-          })
-        }
-        return done(null, user)
-      } catch (error) {
-        return done(error as Error)
-      }
-    }
-  ),
-)
-// Serialização e deserialização do usuário
-passport.serializeUser((user: any, done) => {
-  done(null, user.id)
-})
-
 
 // Rotas
-
 app.use("/auth", authRoutes)
 app.use("/api/acolitos", acolitoRoutes)
-app.use("/api/scales", scalesRoutes)
+app.use("/api/escalas", escalaRoutes)
 app.use("/api/admin", adminRoutes)
 
-
-
-
-// Rota de status
-app.get("/status", (req, res) => {
-  res.json({ status: "online", timeStamp: new Date() })
+// Rota de health check
+app.get("/health", (req, res) => {
+  res.status(200).json({
+    status: "online",
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || "development",
+  })
 })
 
-// Conexão com o MongoDB
-
-mongoose
-  .connect(process.env.MONGODB_URI || "mongodb://localhost;27017/escala-acolitos")
-  .then(() => {
-    console.log("conectado ao MongoDB")
-    // Iniciar o servidor após conectar ao banco de dados
-    app.listen(PORT, () => {
-      console.log(`Servidor conectado na porta${PORT}`)
-
-    })
+// Rota raiz
+app.get("/", (req, res) => {
+  res.json({
+    message: "API Escala de Acólitos",
+    version: "1.0.0",
+    status: "online",
   })
-  .catch((err) => {
-    console.error("Erro ao conectar ao MongoDB:", err)
-    process.exit(1)
-  })
+})
 
+// Middleware de tratamento de erros
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  console.error("Erro não tratado:", err)
+  res.status(500).json({
+    success: false,
+    message: "Erro interno do servidor",
+    ...(process.env.NODE_ENV === "development" && { error: err.message }),
+  })
+})
+
+// Middleware para rotas não encontradas
+app.use("*", (req, res) => {
+  res.status(404).json({
+    success: false,
+    message: "Rota não encontrada",
+  })
+})
+
+// Iniciar o servidor
+app.listen(PORT, () => {
+  console.log(`🚀 Servidor rodando na porta ${PORT}`)
+  console.log(`🌍 Ambiente: ${process.env.NODE_ENV || "development"}`)
+  console.log(`📱 Frontend URL: ${process.env.FRONTEND_URL || "http://localhost:3000"}`)
+})
 
 export default app
-
-
-
-
-
